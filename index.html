@@ -85,16 +85,26 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
   </div>
 </dialog>
 
+<dialog id="kdlg">
+  <h3 style="margin:0 0 10px;font-size:16px">Manage kids</h3>
+  <div id="klist"></div>
+  <div class="row" style="margin-top:10px"><input id="kNew" placeholder="Add a name"><button id="kAdd" class="pri">Add</button></div>
+  <p class="toast" id="kmsg" style="margin:8px 0 0"></p>
+  <div class="row" style="margin-top:8px"><span class="sp"></span><button id="kClose">Done</button></div>
+</dialog>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-const KIDS=['Avyaan','Kyra'];
+const DEFAULT_KIDS=['Avyaan','Kyra'];
 const COLORS=['#3b82f6','#a78bfa','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6','#84cc16'];
 const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const KEY='classTracker.v1';
 let S={classes:[],classColors:{}},kidF='all',week=monday(new Date()),edit=null,pick=COLORS[0];
+function norm(o){const d=Object.assign({classes:[],classColors:{},kids:[]},o);if(!Array.isArray(d.kids)||!d.kids.length)d.kids=DEFAULT_KIDS.slice();return d}
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+S=norm(S);
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}markDirty(true);push()}
 function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
 function key(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -104,8 +114,10 @@ const fmt=d=>d.toLocaleDateString(undefined,{day:'numeric',month:'short'});
 function toast(t){$('toast').textContent=t;setTimeout(()=>{if($('toast').textContent===t)$('toast').textContent=''},4000)}
 
 function render(){
+  if(kidF!=='all'&&!S.kids.includes(kidF))kidF='all';
   $('kids').innerHTML='';
-  ['all',...KIDS].forEach(k=>{const b=document.createElement('button');b.className='pill'+(kidF===k?' on':'');b.textContent=k==='all'?'Both kids':k;b.onclick=()=>{kidF=k;render()};$('kids').appendChild(b)});
+  ['all',...S.kids].forEach(k=>{const b=document.createElement('button');b.className='pill'+(kidF===k?' on':'');b.textContent=k==='all'?'All kids':k;b.onclick=()=>{kidF=k;render()};$('kids').appendChild(b)});
+  const mg=document.createElement('button');mg.textContent='⚙ Manage kids';mg.onclick=()=>{drawKids();$('kdlg').showModal()};$('kids').appendChild(mg);
   $('wk').textContent=fmt(week)+' – '+fmt(addDays(week,6));
   const wk=key(week),tk=key(new Date()),g=$('grid');g.innerHTML='';
   DAYS.forEach((dn,i)=>{
@@ -149,9 +161,9 @@ function drawSw(){
 }
 function openDlg(c,day){
   edit=c;
-  $('fKid').innerHTML=KIDS.map(k=>'<option>'+k+'</option>').join('');
+  $('fKid').innerHTML=S.kids.map(k=>{const o=document.createElement('option');o.textContent=k;return o.outerHTML}).join('');
   $('fDay').innerHTML=DAYS.map((d,i)=>'<option value="'+i+'">'+d+'</option>').join('');
-  $('fKid').value=c?c.kid:(kidF==='all'?KIDS[0]:kidF);
+  $('fKid').value=c?c.kid:(kidF==='all'?S.kids[0]:kidF);
   $('fName').value=c?c.name:'';
   $('fDay').value=c?c.day:day;
   $('fStart').value=c?c.start:'16:00';$('fEnd').value=c?c.end:'17:00';
@@ -174,6 +186,38 @@ $('fSave').onclick=()=>{
   }else S.classes.push({id:Date.now(),week:key(week),done:false,...data});
   save();$('dlg').close();render();
 };
+function kmsg(t){$('kmsg').textContent=t}
+function drawKids(){
+  const l=$('klist');l.innerHTML='';kmsg('');
+  S.kids.forEach((k,i)=>{
+    const r=document.createElement('div');r.className='row';r.style.marginBottom='6px';
+    const inp=document.createElement('input');inp.value=k;inp.onchange=()=>renameKid(i,inp.value);
+    const del=document.createElement('button');del.textContent='✕';del.title='Remove';del.onclick=()=>removeKid(i);
+    r.append(inp,del);l.appendChild(r);
+  });
+}
+function renameKid(i,v){
+  v=v.trim();const old=S.kids[i];
+  if(!v||v===old){drawKids();return}
+  if(S.kids.some((k,j)=>j!==i&&k.toLowerCase()===v.toLowerCase())){drawKids();kmsg('That name already exists.');return}
+  S.kids[i]=v;S.classes.forEach(c=>{if(c.kid===old)c.kid=v});if(kidF===old)kidF=v;
+  save();drawKids();render();
+}
+function removeKid(i){
+  const k=S.kids[i];
+  if(S.kids.length<2){kmsg('Keep at least one child.');return}
+  const n=S.classes.filter(c=>c.kid===k).length;
+  if(!confirm('Remove '+k+(n?' and their '+n+' class(es)':'')+'?'))return;
+  S.kids.splice(i,1);S.classes=S.classes.filter(c=>c.kid!==k);if(kidF===k)kidF='all';
+  save();drawKids();render();
+}
+$('kAdd').onclick=()=>{
+  const v=$('kNew').value.trim();if(!v)return;
+  if(S.kids.some(k=>k.toLowerCase()===v.toLowerCase())){kmsg('That name already exists.');return}
+  S.kids.push(v);$('kNew').value='';save();drawKids();render();
+};
+$('kNew').addEventListener('keydown',e=>{if(e.key==='Enter')$('kAdd').click()});
+$('kClose').onclick=()=>$('kdlg').close();
 render();
 // Backup / restore (data lives on this device)
 $('bk').onclick=()=>{
@@ -184,7 +228,7 @@ $('rs').onclick=()=>$('rsf').click();
 $('rsf').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.classes))throw 0;if(!confirm('Replace current data with this backup?'))return;S=Object.assign({classes:[],classColors:{}},d);save();render();toast('Backup restored.')}catch(x){toast('That file is not a valid backup.')}};
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.classes))throw 0;if(!confirm('Replace current data with this backup?'))return;S=norm(d);save();render();toast('Backup restored.')}catch(x){toast('That file is not a valid backup.')}};
   r.readAsText(f);e.target.value='';
 };
 // ---- Cloud sync (Firebase) ----
@@ -228,8 +272,8 @@ else{
       if(snap.exists){
         if(isDirty()){push();return}
         try{
-          const r=JSON.parse(snap.data().json);
-          if(JSON.stringify(r)!==JSON.stringify(S)){S=Object.assign({classes:[],classColors:{}},r);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}
+          const r=norm(JSON.parse(snap.data().json));
+          if(JSON.stringify(r)!==JSON.stringify(S)){S=r;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}
           setSt('☁ Synced · '+u.email);
         }catch(e){}
       }else if(S.classes.length){push()}
