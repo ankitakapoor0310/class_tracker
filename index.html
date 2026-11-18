@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Class Tracker</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3b6fd4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Classes">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#f6f6f3;--card:#fff;--text:#1d1d1b;--muted:#6b6b66;--line:#e2e2dc;--accent:#3b6fd4;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16161a;--card:#202026;--text:#ececf0;--muted:#9a9aa5;--line:#34343c;--accent:#7ea3f0;color-scheme:dark}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.sp{flex:1}
+button{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.week{font-weight:600;min-width:170px;text-align:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.day{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:120px;display:flex;flex-direction:column;gap:6px}
+.day.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.dh{display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.dh small{color:var(--muted);font-weight:400}
+.add{padding:0 8px;line-height:24px}
+.cls{border-left:5px solid var(--c);background:color-mix(in srgb,var(--c) 18%,var(--card));border-radius:6px;padding:5px 7px;cursor:pointer;font-size:13px}
+.cls.done{opacity:.55}.cls.done .n{text-decoration:line-through}
+.cls .n{font-weight:600}.cls .m{color:var(--muted);font-size:12px}
+.cls label{display:flex;gap:6px;align-items:center;margin-top:3px;font-size:12px;cursor:pointer}
+.empty{color:var(--muted);font-size:12px}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:16px;width:min(360px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.f{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.f label{font-size:12px;color:var(--muted)}
+input,select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px;width:100%}
+.row{display:flex;gap:8px}
+.sw{display:flex;flex-wrap:wrap;gap:6px}
+.sw span{width:26px;height:26px;border-radius:50%;background:var(--c);cursor:pointer;border:2px solid transparent}
+.sw span.on{border-color:var(--text)}
+.toast{color:var(--muted);font-size:13px;margin:0 0 10px;min-height:18px}
+</style>
+</head>
+<body>
+<main>
+<h1>Weekly Class Tracker</h1>
+<div class="bar" id="kids"></div>
+<div class="bar">
+  <button id="prev">‹ Prev</button>
+  <div class="week" id="wk"></div>
+  <button id="next">Next ›</button>
+  <button id="today">This week</button>
+  <span class="sp"></span>
+  <button id="copyFrom">⟲ Copy from last week</button>
+  <button id="copyTo" class="pri">Copy to next week ⟳</button>
+</div>
+<div class="bar"><button id="bk">⬇ Backup</button><button id="rs">⬆ Restore</button><input id="rsf" type="file" accept="application/json" style="display:none"></div>
+<p class="toast" id="toast"></p>
+<div class="grid" id="grid"></div>
+</main>
+
+<dialog id="dlg">
+  <div class="f"><label>Child</label><select id="fKid"></select></div>
+  <div class="f"><label>Class name</label><input id="fName" placeholder="e.g. Swimming"></div>
+  <div class="f"><label>Day</label><select id="fDay"></select></div>
+  <div class="row">
+    <div class="f" style="flex:1"><label>Start</label><input id="fStart" type="time" value="16:00"></div>
+    <div class="f" style="flex:1"><label>End</label><input id="fEnd" type="time" value="17:00"></div>
+  </div>
+  <div class="f"><label>Colour for this class</label><div class="sw" id="fSw"></div></div>
+  <div class="row">
+    <button id="fDel" style="display:none">Delete</button>
+    <span class="sp"></span>
+    <button id="fCancel">Cancel</button>
+    <button id="fSave" class="pri">Save</button>
+  </div>
+</dialog>
+
+<script>
+const KIDS=['Avyaan','Kyra'];
+const COLORS=['#3b82f6','#a78bfa','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6','#84cc16'];
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const KEY='classTracker.v1';
+let S={classes:[],classColors:{}},kidF='all',week=monday(new Date()),edit=null,pick=COLORS[0];
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
+function key(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+const $=id=>document.getElementById(id);
+const fmt=d=>d.toLocaleDateString(undefined,{day:'numeric',month:'short'});
+function toast(t){$('toast').textContent=t;setTimeout(()=>{if($('toast').textContent===t)$('toast').textContent=''},4000)}
+
+function render(){
+  $('kids').innerHTML='';
+  ['all',...KIDS].forEach(k=>{const b=document.createElement('button');b.className='pill'+(kidF===k?' on':'');b.textContent=k==='all'?'Both kids':k;b.onclick=()=>{kidF=k;render()};$('kids').appendChild(b)});
+  $('wk').textContent=fmt(week)+' – '+fmt(addDays(week,6));
+  const wk=key(week),tk=key(new Date()),g=$('grid');g.innerHTML='';
+  DAYS.forEach((dn,i)=>{
+    const d=addDays(week,i),box=document.createElement('div');box.className='day'+(key(d)===tk?' today':'');
+    box.innerHTML='<div class="dh"><span>'+dn+' <small>'+fmt(d)+'</small></span><button class="add" title="Add class">+</button></div>';
+    box.querySelector('.add').onclick=()=>openDlg(null,i);
+    const list=S.classes.filter(c=>c.week===wk&&c.day===i&&(kidF==='all'||c.kid===kidF)).sort((a,b)=>a.start.localeCompare(b.start));
+    if(!list.length){const e=document.createElement('div');e.className='empty';e.textContent='No classes';box.appendChild(e)}
+    list.forEach(c=>{
+      const el=document.createElement('div');el.className='cls'+(c.done?' done':'');el.style.setProperty('--c',c.color);
+      el.innerHTML='<div class="n"></div><div class="m"></div><label><input type="checkbox" style="width:auto"> Attended</label>';
+      el.querySelector('.n').textContent=c.name;
+      el.querySelector('.m').textContent=c.kid+' · '+c.start+'–'+c.end;
+      const cb=el.querySelector('input');cb.checked=!!c.done;
+      cb.onclick=e=>{e.stopPropagation();c.done=cb.checked;save();render()};
+      el.querySelector('label').onclick=e=>e.stopPropagation();
+      el.onclick=()=>openDlg(c,i);
+      box.appendChild(el);
+    });
+    g.appendChild(box);
+  });
+}
+
+function copyWeek(srcDate,dstDate){
+  const s=key(srcDate),d=key(dstDate);let n=0;
+  S.classes.filter(c=>c.week===s&&(kidF==='all'||c.kid===kidF)).forEach(c=>{
+    const dup=S.classes.some(x=>x.week===d&&x.kid===c.kid&&x.name===c.name&&x.day===c.day&&x.start===c.start);
+    if(!dup){S.classes.push({...c,id:Date.now()+Math.random(),week:d,done:false});n++}
+  });
+  save();return n;
+}
+$('copyTo').onclick=()=>{const n=copyWeek(week,addDays(week,7));toast(n?n+' class(es) copied to next week.':'Nothing new to copy – next week already has these.');if(n){week=addDays(week,7)}render()};
+$('copyFrom').onclick=()=>{const n=copyWeek(addDays(week,-7),week);toast(n?n+' class(es) copied from last week.':'Nothing new to copy from last week.');render()};
+$('prev').onclick=()=>{week=addDays(week,-7);render()};
+$('next').onclick=()=>{week=addDays(week,7);render()};
+$('today').onclick=()=>{week=monday(new Date());render()};
+
+function drawSw(){
+  $('fSw').innerHTML='';
+  COLORS.forEach(c=>{const s=document.createElement('span');s.style.setProperty('--c',c);s.className=c===pick?'on':'';s.onclick=()=>{pick=c;drawSw()};$('fSw').appendChild(s)});
+}
+function openDlg(c,day){
+  edit=c;
+  $('fKid').innerHTML=KIDS.map(k=>'<option>'+k+'</option>').join('');
+  $('fDay').innerHTML=DAYS.map((d,i)=>'<option value="'+i+'">'+d+'</option>').join('');
+  $('fKid').value=c?c.kid:(kidF==='all'?KIDS[0]:kidF);
+  $('fName').value=c?c.name:'';
+  $('fDay').value=c?c.day:day;
+  $('fStart').value=c?c.start:'16:00';$('fEnd').value=c?c.end:'17:00';
+  pick=c?c.color:COLORS[0];drawSw();
+  $('fDel').style.display=c?'':'none';
+  $('dlg').showModal();
+}
+$('fName').addEventListener('input',()=>{const k=$('fName').value.trim().toLowerCase();if(!edit&&S.classColors[k]){pick=S.classColors[k];drawSw()}});
+$('fCancel').onclick=()=>$('dlg').close();
+$('fDel').onclick=()=>{S.classes=S.classes.filter(x=>x!==edit);save();$('dlg').close();render()};
+$('fSave').onclick=()=>{
+  const name=$('fName').value.trim();if(!name){$('fName').focus();return}
+  const data={kid:$('fKid').value,name,day:+$('fDay').value,start:$('fStart').value,end:$('fEnd').value,color:pick};
+  S.classColors[name.toLowerCase()]=pick;
+  if(edit){
+    const old=edit.name.toLowerCase();
+    Object.assign(edit,data);
+    // class-wise colour: recolour every class with the same name
+    S.classes.forEach(x=>{if(x.name.toLowerCase()===name.toLowerCase()||x.name.toLowerCase()===old)if(x.name.toLowerCase()===name.toLowerCase())x.color=pick});
+  }else S.classes.push({id:Date.now(),week:key(week),done:false,...data});
+  save();$('dlg').close();render();
+};
+render();
+// Backup / restore (data lives on this device)
+$('bk').onclick=()=>{
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='class-tracker-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+$('rs').onclick=()=>$('rsf').click();
+$('rsf').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.classes))throw 0;if(!confirm('Replace current data with this backup?'))return;S=Object.assign({classes:[],classColors:{}},d);save();render();toast('Backup restored.')}catch(x){toast('That file is not a valid backup.')}};
+  r.readAsText(f);e.target.value='';
+};
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+</script>
+</body>
+</html>
