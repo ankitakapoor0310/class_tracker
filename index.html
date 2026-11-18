@@ -11,6 +11,9 @@
 <meta name="apple-mobile-web-app-title" content="Classes">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Lora:wght@400;600&family=Nunito:wght@400;700&family=Poppins:wght@400;600&display=swap">
 <style>
 :root{--bg:#f6f6f3;--card:#fff;--text:#1d1d1b;--muted:#6b6b66;--line:#e2e2dc;--accent:#3b6fd4;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -48,6 +51,22 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
 .sw span{width:26px;height:26px;border-radius:50%;background:var(--c);cursor:pointer;border:2px solid transparent}
 .sw span.on{border-color:var(--text)}
 .toast{color:var(--muted);font-size:13px;margin:0 0 10px;min-height:18px}
+.pill{display:inline-flex;align-items:center;gap:6px}
+.pill.on{background:var(--kc,var(--accent));border-color:var(--kc,var(--accent));color:#fff}
+.pill.on .av{border-color:#fff}
+.av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--kc);color:#fff;font-weight:700;overflow:hidden;border:2px solid var(--kc);flex:none}
+.av img{width:100%;height:100%;object-fit:cover}
+.cls .top{display:flex;align-items:center;gap:6px}
+.cls .ic{font-size:18px;line-height:1}
+.cls .n{flex:1}
+.ics{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.ics span{font-size:20px;text-align:center;padding:4px 0;border-radius:8px;cursor:pointer;border:2px solid transparent}
+.ics span.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 15%,transparent)}
+.kc{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.kc .sw span{width:24px;height:24px}
+.kprev{font-size:18px}
+#kdlg{width:min(440px,94vw)}
+.day{box-shadow:0 1px 3px rgba(0,0,0,.06)}
 </style>
 </head>
 <body>
@@ -71,6 +90,7 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
 <dialog id="dlg">
   <div class="f"><label>Child</label><select id="fKid"></select></div>
   <div class="f"><label>Class name</label><input id="fName" placeholder="e.g. Swimming"></div>
+  <div class="f"><label>Icon</label><div class="ics" id="fIc"></div></div>
   <div class="f"><label>Day</label><select id="fDay"></select></div>
   <div class="row">
     <div class="f" style="flex:1"><label>Start</label><input id="fStart" type="time" value="16:00"></div>
@@ -98,11 +118,24 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const DEFAULT_KIDS=['Avyaan','Kyra'];
+const KID_COLORS=['#4a6fa5','#8e7cc3','#3d8b7a','#6f9a5a','#cf7a55','#c4627f','#8a4f7d','#c19a3a'];
+const FONTS={classic:{n:'Classic',f:'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'},rounded:{n:'Rounded',f:'"Nunito",system-ui,sans-serif'},elegant:{n:'Elegant',f:'"Lora",Georgia,serif'},playful:{n:'Playful',f:'"Fredoka","Comic Sans MS",system-ui,sans-serif'},modern:{n:'Modern',f:'"Poppins",system-ui,sans-serif'}};
+const DEFAULT_PROFILES={Avyaan:{color:'#4a6fa5',font:'rounded'},Kyra:{color:'#8e7cc3',font:'playful'}};
+const EMOJIS=['📚','🏊','💃','🎹','🎸','🎨','⚽','🏏','🎾','🥋','♟️','💻','🧘','⛸️','🎤','🎭','🔬','➕','🏀','🏐','🥁','🎻','🗣️','🧩'];
+const GUESS=[[/swim/,'🏊'],[/danc|ballet|zumba/,'💃'],[/piano|keyboard/,'🎹'],[/guitar/,'🎸'],[/draw|art|paint|craft/,'🎨'],[/foot|soccer/,'⚽'],[/cricket/,'🏏'],[/tennis|badminton/,'🎾'],[/karate|judo|taekwondo|martial/,'🥋'],[/chess/,'♟️'],[/cod|robot|comput/,'💻'],[/yoga/,'🧘'],[/skat/,'⛸️'],[/sing|vocal|music/,'🎤'],[/drama|theat/,'🎭'],[/science|lab/,'🔬'],[/math|abacus/,'➕'],[/basket/,'🏀'],[/drum/,'🥁'],[/violin/,'🎻'],[/speak|english|hindi|language/,'🗣️'],[/read|phonics/,'📚']];
+let ico='📚';
 const COLORS=['#3b82f6','#a78bfa','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6','#84cc16'];
 const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const KEY='classTracker.v1';
 let S={classes:[],classColors:{}},kidF='all',week=monday(new Date()),edit=null,pick=COLORS[0];
-function norm(o){const d=Object.assign({classes:[],classColors:{},kids:[]},o);if(!Array.isArray(d.kids)||!d.kids.length)d.kids=DEFAULT_KIDS.slice();return d}
+function defProf(k,i){return Object.assign({color:KID_COLORS[i%KID_COLORS.length],font:'classic',photo:''},DEFAULT_PROFILES[k]||{})}
+function norm(o){
+  const d=Object.assign({classes:[],classColors:{},classIcons:{},kids:[],profiles:{}},o);
+  if(!Array.isArray(d.kids)||!d.kids.length)d.kids=DEFAULT_KIDS.slice();
+  d.profiles=Object.assign({},d.profiles);
+  d.kids.forEach((k,i)=>{d.profiles[k]=Object.assign(defProf(k,i),d.profiles[k])});
+  return d;
+}
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 S=norm(S);
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}markDirty(true);push()}
@@ -113,10 +146,33 @@ const $=id=>document.getElementById(id);
 const fmt=d=>d.toLocaleDateString(undefined,{day:'numeric',month:'short'});
 function toast(t){$('toast').textContent=t;setTimeout(()=>{if($('toast').textContent===t)$('toast').textContent=''},4000)}
 
+function prof(k){return S.profiles[k]||defProf(k,0)}
+function avatar(k,size){
+  const p=prof(k),a=document.createElement('span');a.className='av';
+  a.style.cssText='width:'+size+'px;height:'+size+'px;--kc:'+p.color+';font-size:'+Math.round(size*.45)+'px';
+  if(p.photo){const im=document.createElement('img');im.src=p.photo;im.alt=k;a.appendChild(im)}else a.textContent=k.trim().charAt(0).toUpperCase();
+  return a;
+}
+function readPhoto(file,cb){
+  const fr=new FileReader();
+  fr.onload=()=>{const im=new Image();
+    im.onload=()=>{const n=128,c=document.createElement('canvas');c.width=c.height=n;const x=c.getContext('2d');const m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,n,n);cb(c.toDataURL('image/jpeg',0.82))};
+    im.onerror=()=>cb(null);im.src=fr.result};
+  fr.onerror=()=>cb(null);fr.readAsDataURL(file);
+}
+function applyTheme(){
+  const r=document.documentElement.style,m=document.querySelector('meta[name=theme-color]');
+  if(kidF==='all'){r.removeProperty('--accent');document.body.style.fontFamily='';if(m)m.content='#3b6fd4'}
+  else{const p=prof(kidF);r.setProperty('--accent',p.color);document.body.style.fontFamily=(FONTS[p.font]||FONTS.classic).f;if(m)m.content=p.color}
+}
+function guessIcon(k){for(const [r,e] of GUESS)if(r.test(k))return e;return ''}
+function drawIc(){const g=$('fIc');g.innerHTML='';EMOJIS.forEach(e=>{const s=document.createElement('span');s.textContent=e;if(e===ico)s.className='on';s.onclick=()=>{ico=e;drawIc()};g.appendChild(s)})}
+
 function render(){
   if(kidF!=='all'&&!S.kids.includes(kidF))kidF='all';
+  applyTheme();
   $('kids').innerHTML='';
-  ['all',...S.kids].forEach(k=>{const b=document.createElement('button');b.className='pill'+(kidF===k?' on':'');b.textContent=k==='all'?'All kids':k;b.onclick=()=>{kidF=k;render()};$('kids').appendChild(b)});
+  ['all',...S.kids].forEach(k=>{const b=document.createElement('button');b.className='pill'+(kidF===k?' on':'');if(k!=='all'){b.style.setProperty('--kc',prof(k).color);b.appendChild(avatar(k,22))}const t=document.createElement('span');t.textContent=k==='all'?'All kids':k;b.appendChild(t);b.onclick=()=>{kidF=k;render()};$('kids').appendChild(b)});
   const mg=document.createElement('button');mg.textContent='⚙ Manage kids';mg.onclick=()=>{drawKids();$('kdlg').showModal()};$('kids').appendChild(mg);
   $('wk').textContent=fmt(week)+' – '+fmt(addDays(week,6));
   const wk=key(week),tk=key(new Date()),g=$('grid');g.innerHTML='';
@@ -128,9 +184,12 @@ function render(){
     if(!list.length){const e=document.createElement('div');e.className='empty';e.textContent='No classes';box.appendChild(e)}
     list.forEach(c=>{
       const el=document.createElement('div');el.className='cls'+(c.done?' done':'');el.style.setProperty('--c',c.color);
-      el.innerHTML='<div class="n"></div><div class="m"></div><label><input type="checkbox" style="width:auto"> Attended</label>';
+      el.innerHTML='<div class="top"><span class="ic"></span><div class="n"></div></div><div class="m"></div><label><input type="checkbox" style="width:auto"> Attended</label>';
+      el.querySelector('.ic').textContent=c.icon||S.classIcons[c.name.toLowerCase()]||'📚';
       el.querySelector('.n').textContent=c.name;
+      el.querySelector('.top').appendChild(avatar(c.kid,22));
       el.querySelector('.m').textContent=c.kid+' · '+c.start+'–'+c.end;
+      el.style.fontFamily=(FONTS[prof(c.kid).font]||FONTS.classic).f;
       const cb=el.querySelector('input');cb.checked=!!c.done;
       cb.onclick=e=>{e.stopPropagation();c.done=cb.checked;save();render()};
       el.querySelector('label').onclick=e=>e.stopPropagation();
@@ -168,21 +227,22 @@ function openDlg(c,day){
   $('fDay').value=c?c.day:day;
   $('fStart').value=c?c.start:'16:00';$('fEnd').value=c?c.end:'17:00';
   pick=c?c.color:COLORS[0];drawSw();
+  ico=c?(c.icon||S.classIcons[c.name.toLowerCase()]||'📚'):'📚';drawIc();
   $('fDel').style.display=c?'':'none';
   $('dlg').showModal();
 }
-$('fName').addEventListener('input',()=>{const k=$('fName').value.trim().toLowerCase();if(!edit&&S.classColors[k]){pick=S.classColors[k];drawSw()}});
+$('fName').addEventListener('input',()=>{const k=$('fName').value.trim().toLowerCase();if(edit)return;if(S.classColors[k]){pick=S.classColors[k];drawSw()}const g=S.classIcons[k]||guessIcon(k);if(g){ico=g;drawIc()}});
 $('fCancel').onclick=()=>$('dlg').close();
 $('fDel').onclick=()=>{S.classes=S.classes.filter(x=>x!==edit);save();$('dlg').close();render()};
 $('fSave').onclick=()=>{
   const name=$('fName').value.trim();if(!name){$('fName').focus();return}
-  const data={kid:$('fKid').value,name,day:+$('fDay').value,start:$('fStart').value,end:$('fEnd').value,color:pick};
-  S.classColors[name.toLowerCase()]=pick;
+  const data={kid:$('fKid').value,name,day:+$('fDay').value,start:$('fStart').value,end:$('fEnd').value,color:pick,icon:ico};
+  S.classColors[name.toLowerCase()]=pick;S.classIcons[name.toLowerCase()]=ico;
   if(edit){
     const old=edit.name.toLowerCase();
     Object.assign(edit,data);
     // class-wise colour: recolour every class with the same name
-    S.classes.forEach(x=>{if(x.name.toLowerCase()===name.toLowerCase()||x.name.toLowerCase()===old)if(x.name.toLowerCase()===name.toLowerCase())x.color=pick});
+    S.classes.forEach(x=>{if(x.name.toLowerCase()===name.toLowerCase()){x.color=pick;x.icon=ico}});
   }else S.classes.push({id:Date.now(),week:key(week),done:false,...data});
   save();$('dlg').close();render();
 };
@@ -190,17 +250,38 @@ function kmsg(t){$('kmsg').textContent=t}
 function drawKids(){
   const l=$('klist');l.innerHTML='';kmsg('');
   S.kids.forEach((k,i)=>{
-    const r=document.createElement('div');r.className='row';r.style.marginBottom='6px';
+    const p=prof(k),card=document.createElement('div');card.className='kc';
+    const r1=document.createElement('div');r1.className='row';r1.style.alignItems='center';
+    const file=document.createElement('input');file.type='file';file.accept='image/*';file.style.display='none';
+    file.onchange=()=>{const f=file.files[0];if(!f)return;readPhoto(f,d=>{if(!d){kmsg('Could not read that image.');return}S.profiles[k].photo=d;save();drawKids();render()})};
+    const av=avatar(k,52);av.style.cursor='pointer';av.title='Change photo';av.onclick=()=>file.click();
     const inp=document.createElement('input');inp.value=k;inp.onchange=()=>renameKid(i,inp.value);
     const del=document.createElement('button');del.textContent='✕';del.title='Remove';del.onclick=()=>removeKid(i);
-    r.append(inp,del);l.appendChild(r);
+    r1.append(av,inp,del,file);card.appendChild(r1);
+    const ph=document.createElement('div');ph.style.cssText='font-size:12px;color:var(--muted);margin:4px 0 6px';
+    ph.textContent=p.photo?'Tap the picture to change it. ':'Tap the circle to add a photo. ';
+    if(p.photo){const rm=document.createElement('a');rm.textContent='Remove photo';rm.href='#';rm.onclick=e=>{e.preventDefault();S.profiles[k].photo='';save();drawKids();render()};ph.appendChild(rm)}
+    card.appendChild(ph);
+    const sw=document.createElement('div');sw.className='sw';
+    KID_COLORS.forEach(c=>{const x=document.createElement('span');x.style.setProperty('--c',c);if(c===p.color)x.className='on';x.onclick=()=>{S.profiles[k].color=c;save();drawKids();render()};sw.appendChild(x)});
+    card.appendChild(sw);
+    const row=document.createElement('div');row.className='row';row.style.cssText='margin-top:8px;align-items:center';
+    const sel=document.createElement('select');
+    Object.keys(FONTS).forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=FONTS[f].n;sel.appendChild(o)});
+    sel.value=p.font;
+    const pv=document.createElement('div');pv.className='kprev';pv.textContent='Aa – '+k;
+    const paint=()=>{pv.style.fontFamily=FONTS[S.profiles[k].font].f;pv.style.color=S.profiles[k].color};paint();
+    sel.onchange=()=>{S.profiles[k].font=sel.value;save();paint();render()};
+    row.append(sel,pv);card.appendChild(row);
+    l.appendChild(card);
   });
 }
 function renameKid(i,v){
   v=v.trim();const old=S.kids[i];
   if(!v||v===old){drawKids();return}
   if(S.kids.some((k,j)=>j!==i&&k.toLowerCase()===v.toLowerCase())){drawKids();kmsg('That name already exists.');return}
-  S.kids[i]=v;S.classes.forEach(c=>{if(c.kid===old)c.kid=v});if(kidF===old)kidF=v;
+  S.kids[i]=v;S.profiles[v]=S.profiles[old];delete S.profiles[old];
+  S.classes.forEach(c=>{if(c.kid===old)c.kid=v});if(kidF===old)kidF=v;
   save();drawKids();render();
 }
 function removeKid(i){
@@ -208,13 +289,13 @@ function removeKid(i){
   if(S.kids.length<2){kmsg('Keep at least one child.');return}
   const n=S.classes.filter(c=>c.kid===k).length;
   if(!confirm('Remove '+k+(n?' and their '+n+' class(es)':'')+'?'))return;
-  S.kids.splice(i,1);S.classes=S.classes.filter(c=>c.kid!==k);if(kidF===k)kidF='all';
+  S.kids.splice(i,1);delete S.profiles[k];S.classes=S.classes.filter(c=>c.kid!==k);if(kidF===k)kidF='all';
   save();drawKids();render();
 }
 $('kAdd').onclick=()=>{
   const v=$('kNew').value.trim();if(!v)return;
   if(S.kids.some(k=>k.toLowerCase()===v.toLowerCase())){kmsg('That name already exists.');return}
-  S.kids.push(v);$('kNew').value='';save();drawKids();render();
+  S.kids.push(v);S.profiles[v]=defProf(v,S.kids.length-1);$('kNew').value='';save();drawKids();render();
 };
 $('kNew').addEventListener('keydown',e=>{if(e.key==='Enter')$('kAdd').click()});
 $('kClose').onclick=()=>$('kdlg').close();
