@@ -208,9 +208,16 @@ else{
   $('auth').onclick=async()=>{
     if(fauth.currentUser){await fauth.signOut();return}
     const p=new firebase.auth.GoogleAuthProvider();
-    try{await fauth.signInWithPopup(p)}catch(e){if(!e||e.code!=='auth/popup-closed-by-user')fauth.signInWithRedirect(p)}
+    p.setCustomParameters({prompt:'select_account'});
+    setSt('Opening Google sign-in…');
+    try{await fauth.signInWithPopup(p)}
+    catch(e){
+      const c=(e&&e.code)||'unknown';
+      if(c==='auth/popup-blocked'||c==='auth/operation-not-supported-in-this-environment'){fauth.signInWithRedirect(p)}
+      else setSt('Sign-in failed: '+c);
+    }
   };
-  fauth.getRedirectResult().catch(()=>{});
+  fauth.getRedirectResult().catch(e=>setSt('Sign-in failed: '+((e&&e.code)||'unknown')));
   fauth.onAuthStateChanged(u=>{
     if(unsub){unsub();unsub=null}fref=null;
     if(!u){$('auth').textContent='Sign in with Google';setSt('Not signed in – saved on this device');return}
