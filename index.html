@@ -63,7 +63,7 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
   <button id="copyFrom">⟲ Copy from last week</button>
   <button id="copyTo" class="pri">Copy to next week ⟳</button>
 </div>
-<div class="bar"><button id="bk">⬇ Backup</button><button id="rs">⬆ Restore</button><input id="rsf" type="file" accept="application/json" style="display:none"></div>
+<div class="bar"><button id="auth" class="pri">Sign in with Google</button><span class="toast" id="sync" style="margin:0"></span><span class="sp"></span><button id="bk">⬇ Backup</button><button id="rs">⬆ Restore</button><input id="rsf" type="file" accept="application/json" style="display:none"></div>
 <p class="toast" id="toast"></p>
 <div class="grid" id="grid"></div>
 </main>
@@ -85,6 +85,9 @@ input,select{font:inherit;color:var(--text);background:var(--bg);border:1px soli
   </div>
 </dialog>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const KIDS=['Avyaan','Kyra'];
 const COLORS=['#3b82f6','#a78bfa','#10b981','#f59e0b','#ef4444','#ec4899','#14b8a6','#84cc16'];
@@ -92,7 +95,7 @@ const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const KEY='classTracker.v1';
 let S={classes:[],classColors:{}},kidF='all',week=monday(new Date()),edit=null,pick=COLORS[0];
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}markDirty(true);push()}
 function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
 function key(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
@@ -184,6 +187,49 @@ $('rsf').onchange=e=>{
   r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.classes))throw 0;if(!confirm('Replace current data with this backup?'))return;S=Object.assign({classes:[],classColors:{}},d);save();render();toast('Backup restored.')}catch(x){toast('That file is not a valid backup.')}};
   r.readAsText(f);e.target.value='';
 };
+// ---- Cloud sync (Firebase) ----
+const FIREBASE_CONFIG={apiKey:"AIzaSyDTYOAXgqgmIaQv0NMhcuVgVc4GXEbxznM",authDomain:"class-tracker-89cb9.firebaseapp.com",projectId:"class-tracker-89cb9",storageBucket:"class-tracker-89cb9.firebasestorage.app",messagingSenderId:"774137650141",appId:"1:774137650141:web:41fad54e6a030b05a07434"};
+let fauth=null,fdb=null,fref=null,pushT=null,unsub=null;
+const DIRTY=KEY+'.dirty';
+function setSt(t){$('sync').textContent=t}
+function markDirty(v){try{v?localStorage.setItem(DIRTY,'1'):localStorage.removeItem(DIRTY)}catch(e){}}
+function isDirty(){try{return !!localStorage.getItem(DIRTY)}catch(e){return false}}
+function push(){
+  if(!fref)return;clearTimeout(pushT);setSt('Syncing…');
+  pushT=setTimeout(async()=>{
+    try{await fref.set({json:JSON.stringify(S),updated:Date.now()});pushT=null;markDirty(false);setSt('☁ Synced · '+fauth.currentUser.email)}
+    catch(e){pushT=null;setSt('Offline – will sync later')}
+  },400);
+}
+const cfgOk=typeof firebase!=='undefined'&&!/PASTE/.test(FIREBASE_CONFIG.apiKey);
+if(!cfgOk){$('auth').style.display='none';setSt(typeof firebase==='undefined'?'Offline – saved on this device':'Saved on this device only')}
+else{
+  firebase.initializeApp(FIREBASE_CONFIG);fauth=firebase.auth();fdb=firebase.firestore();
+  $('auth').onclick=async()=>{
+    if(fauth.currentUser){await fauth.signOut();return}
+    const p=new firebase.auth.GoogleAuthProvider();
+    try{await fauth.signInWithPopup(p)}catch(e){if(!e||e.code!=='auth/popup-closed-by-user')fauth.signInWithRedirect(p)}
+  };
+  fauth.getRedirectResult().catch(()=>{});
+  fauth.onAuthStateChanged(u=>{
+    if(unsub){unsub();unsub=null}fref=null;
+    if(!u){$('auth').textContent='Sign in with Google';setSt('Not signed in – saved on this device');return}
+    $('auth').textContent='Sign out';
+    fref=fdb.collection('trackers').doc('family');
+    unsub=fref.onSnapshot(snap=>{
+      if(snap.metadata.hasPendingWrites||pushT)return;
+      if(snap.exists){
+        if(isDirty()){push();return}
+        try{
+          const r=JSON.parse(snap.data().json);
+          if(JSON.stringify(r)!==JSON.stringify(S)){S=Object.assign({classes:[],classColors:{}},r);try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}render()}
+          setSt('☁ Synced · '+u.email);
+        }catch(e){}
+      }else if(S.classes.length){push()}
+      else setSt('☁ Synced · '+u.email);
+    },err=>setSt(err&&err.code==='permission-denied'?'This Google account is not allowed':'Offline – saved on this device'));
+  });
+}
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 </script>
 </body>
